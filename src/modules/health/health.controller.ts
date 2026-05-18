@@ -1,13 +1,11 @@
-import { InjectQueue } from '@nestjs/bull';
 import { Controller, Get, HttpStatus, Res, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
-import type { Queue } from 'bull';
 import type { Response } from 'express';
 import { DataSource } from 'typeorm';
 import { Public } from '../../common/decorators/public.decorator';
-import { QUEUES } from '../../common/constants/queue.constants';
+import { RedisService } from '../redis/redis.service';
 import * as SYS_MSG from '../../constants/system.messages';
 import { HealthCheckDocs } from './docs/health-swagger.doc';
 import { HEALTH_RATE_LIMIT } from './health.constants';
@@ -16,7 +14,7 @@ import { HEALTH_RATE_LIMIT } from './health.constants';
 @Controller('health')
 export class HealthController {
   constructor(
-    @InjectQueue(QUEUES.FUNNEL_GENERATION) private readonly funnelQueue: Queue,
+    private readonly redisService: RedisService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -26,36 +24,35 @@ export class HealthController {
   @Public()
   @Get()
   async check(@Res({ passthrough: true }) res: Response) {
-    const [queueHealthy, dbHealthy] = await Promise.all([
-      this.checkQueue(),
+    const [redisHealthy, dbHealthy] = await Promise.all([
+      this.checkRedis(),
       this.checkDb(),
     ]);
 
-    const healthy = queueHealthy && dbHealthy;
-    res.status(healthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+    const healthy = redisHealthy && dbHealthy;
+    res.status(HttpStatus.OK);
 
     return {
       status: healthy ? SYS_MSG.HEALTH_OK : SYS_MSG.HEALTH_DEGRADED,
       timestamp: new Date().toISOString(),
       services: {
         database: dbHealthy ? SYS_MSG.HEALTH_SERVICE_UP : SYS_MSG.HEALTH_SERVICE_DOWN,
-        queue: queueHealthy ? SYS_MSG.HEALTH_SERVICE_UP : SYS_MSG.HEALTH_SERVICE_DOWN,
+        redis: redisHealthy ? SYS_MSG.HEALTH_SERVICE_UP : SYS_MSG.HEALTH_SERVICE_DOWN,
       },
     };
   }
 
-  private async checkQueue(): Promise<boolean> {
+  private async checkRedis(): Promise<boolean> {
     try {
       let timerId: ReturnType<typeof setTimeout>;
       const timeout = new Promise<never>((_, reject) => {
         timerId = setTimeout(() => reject(new Error('timeout')), 2000);
       });
       try {
-        await Promise.race([this.funnelQueue.getJobCounts(), timeout]);
+        return await Promise.race([this.redisService.ping(), timeout]);
       } finally {
         clearTimeout(timerId!);
       }
-      return true;
     } catch {
       return false;
     }

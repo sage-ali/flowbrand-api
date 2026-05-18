@@ -17,12 +17,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           enableReadyCheck: false,
           maxRetriesPerRequest: null,
           retryStrategy: (times: number) => {
-            if (times <= 5) {
-              return 5000;
-            }
-            // slow phase: cap at 30 s + jitter so workers don't thunderherd on recovery
-            const jitter = Math.floor(Math.random() * 5000);
-            return Math.min(times * 1000, 30_000) + jitter;
+            if (times > 10) return null; // give up after 10 retries
+            if (times <= 3) return 1000; // first 3 retries: 1s apart
+            const jitter = Math.floor(Math.random() * 2000);
+            return Math.min(times * 1000, 10_000) + jitter;
           },
         },
         prefix: 'seil:bull',

@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from "typeorm";
 
-export class AddOnboardingFieldsToUser1779014821998 implements MigrationInterface {
+export class AddOnboardingFieldsToUser1780000003000 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.addColumns('users', [

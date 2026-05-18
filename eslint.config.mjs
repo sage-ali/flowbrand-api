@@ -4,6 +4,9 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 export default defineConfig(
   globalIgnores(['eslint.config.mjs', '**/*.spec.ts', '**/*.e2e-spec.ts']),

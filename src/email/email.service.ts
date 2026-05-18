@@ -42,9 +42,19 @@ export class EmailService {
     priority: number,
   ): Promise<string | undefined> {
     try {
-      const queued = await this.emailQueue.add(JOBS.SEND_EMAIL, job, {
-        priority,
+      let timerId: ReturnType<typeof setTimeout>;
+      const timeout = new Promise<never>((_, reject) => {
+        timerId = setTimeout(
+          () => reject(new Error('Queue add timed out after 5s — Redis may be unavailable')),
+          5000,
+        );
       });
+
+      const queued = await Promise.race([
+        this.emailQueue.add(JOBS.SEND_EMAIL, job, { priority }),
+        timeout,
+      ]);
+      clearTimeout(timerId!);
 
       this.logger.log({
         message: 'Email job queued',
@@ -57,7 +67,7 @@ export class EmailService {
       return String(queued.id);
     } catch (err) {
       this.logger.error({
-        message: 'Failed to queue email — Redis may be unavailable',
+        message: 'Failed to queue email',
         type: job.type,
         to: maskEmail(job.to),
         error: (err as Error).message,
